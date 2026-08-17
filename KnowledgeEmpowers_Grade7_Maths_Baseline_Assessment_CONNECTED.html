@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KnowledgeEmpowers Grade 7 Maths Baseline Assessment</title>
+<style>
+:root{--maroon:#681536;--maroon2:#4b0f27;--charcoal:#25262a;--muted:#666b73;--bg:#f5f5f6;--line:#dedfe3;--white:#fff;--green:#287a57;--amber:#a96e17;--red:#a63838}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:Arial,Helvetica,sans-serif;color:var(--charcoal)}
+button,input{font:inherit}
+.wrapper{max-width:820px;margin:auto;padding:18px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.brand{font-weight:800;color:var(--maroon);font-size:18px}
+.brand span{font-weight:500;color:#777}
+.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:26px;box-shadow:0 8px 25px rgba(0,0,0,.05)}
+h1{font-size:clamp(28px,6vw,42px);line-height:1.1;margin:0 0 12px}
+h2{font-size:25px;margin:0 0 16px}
+p{line-height:1.55;color:var(--muted)}
+label.field{display:block;font-weight:700;margin:20px 0 8px}
+input[type=text]{width:100%;padding:14px;border:1px solid #c9cbd0;border-radius:10px}
+.notice{margin-top:18px;padding:14px;border:1px solid var(--line);background:#fafafa;border-radius:10px;color:#555}
+.progress-track{height:8px;background:#e9e9ec;border-radius:20px;overflow:hidden}
+.progress-fill{height:100%;width:0;background:var(--maroon);transition:.2s}
+.meta{display:flex;justify-content:space-between;margin:11px 0 20px;color:#777;font-size:14px}
+.question{font-size:23px;font-weight:750;line-height:1.4}
+.options{display:grid;gap:11px;margin-top:20px}
+.option{display:flex;align-items:flex-start;gap:10px;padding:15px;border:1px solid var(--line);border-radius:12px;cursor:pointer;background:white}
+.option:hover{border-color:var(--maroon)}
+.option.selected{border:2px solid var(--maroon);background:#fbf5f7}
+.option input{margin-top:4px;accent-color:var(--maroon)}
+.actions{display:flex;justify-content:space-between;gap:10px;margin-top:24px}
+button{border:0;border-radius:10px;padding:13px 18px;font-weight:750;cursor:pointer;background:var(--maroon);color:white}
+button.secondary{background:#ececee;color:#29292d}
+button:disabled{opacity:.45;cursor:not-allowed}
+.hidden{display:none!important}
+.score{font-size:56px;font-weight:850;color:var(--maroon);text-align:center}
+.center{text-align:center}
+.badge{display:inline-block;padding:7px 12px;border-radius:999px;font-size:13px;font-weight:800}
+.green{background:#e8f4ee;color:var(--green)} .amber{background:#fff3dc;color:var(--amber)} .red{background:#fbe9e9;color:var(--red)}
+.skill{border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
+.skillhead{display:flex;justify-content:space-between;font-weight:750}
+.bar{height:7px;background:#ececef;border-radius:20px;overflow:hidden;margin:10px 0 6px}
+.bar i{display:block;height:100%;background:var(--maroon)}
+.rec{background:#f8f3f5;border-left:4px solid var(--maroon);padding:15px;margin:10px 0;border-radius:8px}
+.small{font-size:13px;color:#777}
+@media(max-width:600px){.wrapper{padding:10px}.card{padding:19px}.actions{flex-direction:column-reverse}.actions button{width:100%}.question{font-size:20px}}
+@media print{body{background:white}.header,#start,#quiz,.actions{display:none!important}.card{box-shadow:none;border:0}}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<header class="header">
+  <div class="brand">KnowledgeEmpowers <span>Learning</span></div>
+  <div class="small">Grade 7 Mathematics</div>
+</header>
+
+<section id="startScreen" class="card">
+  <h1>Maths Baseline Assessment</h1>
+  <p>Welcome to the KnowledgeEmpowers Grade 7 Mathematics Baseline Assessment. This assessment helps us understand what you already know and which skills may need more practice.</p>
+  <label class="field" for="learnerName">Learner name</label>
+  <input id="learnerName" type="text" maxlength="60" placeholder="Enter learner name" autocomplete="name">
+  <div class="notice"><strong>40 questions</strong> · Approximately 25–35 minutes · Work independently and choose the answer you believe is correct.</div>
+  <div class="actions"><span></span><button id="startButton" type="button">Start Baseline Assessment</button></div>
+</section>
+
+<section id="quizScreen" class="card hidden">
+  <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+  <div class="meta"><span id="questionCounter"></span><span id="skillName"></span></div>
+  <div id="questionText" class="question"></div>
+  <div id="options" class="options"></div>
+  <div class="actions">
+    <button id="previousButton" class="secondary" type="button">Previous</button>
+    <button id="nextButton" type="button">Next</button>
+  </div>
+</section>
+
+<section id="resultsScreen" class="card hidden">
+  <div class="center">
+    <div class="small">KnowledgeEmpowers Maths Baseline Profile</div>
+    <h1 id="resultHeading"></h1>
+    <div id="score" class="score"></div>
+    <div id="level"></div>
+    <p id="resultSummary"></p>
+  </div>
+  <h2>Skill profile</h2>
+  <div id="skillResults"></div>
+  <h2>Recommended learning pathway</h2>
+  <div id="recommendations"></div>
+  <div class="notice"><strong>Remember:</strong> Your baseline is a starting point, not a label. It helps us decide where your learning should begin.</div>
+  <div class="actions">
+    <button id="retakeButton" class="secondary" type="button">Retake Baseline Assessment</button>
+    <button id="printButton" type="button">Print / Save Report</button>
+  </div>
+</section>
+</div>
+
+<script>
+(function() {
+"use strict";
+const RESULTS_ENDPOINT="https://script.google.com/macros/s/AKfycbw0K34ydq0Zcgje_s3FQPEDaQf79xkBV_SRQzSOomtx-MJOl7DG5g4oi5E8aoneiIemBQ/exec";
+
+const QUESTIONS = [{"skill": "Whole Numbers", "q": "Which number has the greatest value?", "opts": ["7 098", "7 980", "7 809", "7 890"], "a": 1}, {"skill": "Whole Numbers", "q": "What is the value of the digit 6 in 46 218?", "opts": ["6", "60", "600", "6 000"], "a": 3}, {"skill": "Whole Numbers", "q": "Round 38 746 to the nearest thousand.", "opts": ["38 000", "38 700", "39 000", "40 000"], "a": 2}, {"skill": "Operations", "q": "Calculate: 4 608 + 2 795.", "opts": ["7 303", "7 393", "7 403", "7 503"], "a": 1}, {"skill": "Operations", "q": "Calculate: 8 000 − 3 476.", "opts": ["4 424", "4 524", "4 624", "5 524"], "a": 1}, {"skill": "Operations", "q": "Calculate: 36 × 24.", "opts": ["744", "824", "864", "964"], "a": 2}, {"skill": "Operations", "q": "Calculate: 1 248 ÷ 16.", "opts": ["68", "72", "78", "82"], "a": 1}, {"skill": "Order of Operations", "q": "Calculate: 18 + 6 × 4.", "opts": ["96", "42", "48", "24"], "a": 1}, {"skill": "Factors & Multiples", "q": "Which number is a factor of 36?", "opts": ["5", "7", "9", "11"], "a": 2}, {"skill": "Factors & Multiples", "q": "What is the lowest common multiple of 4 and 6?", "opts": ["8", "10", "12", "24"], "a": 2}, {"skill": "Integers", "q": "Which statement is correct?", "opts": ["−8 is greater than −3", "−3 is greater than −8", "−8 = 8", "3 is less than −3"], "a": 1}, {"skill": "Integers", "q": "Calculate: −7 + 12.", "opts": ["−19", "−5", "5", "19"], "a": 2}, {"skill": "Integers", "q": "Calculate: 4 − 9.", "opts": ["−13", "−5", "5", "13"], "a": 1}, {"skill": "Fractions", "q": "Which fraction is equivalent to 3/4?", "opts": ["6/10", "6/12", "9/12", "12/20"], "a": 2}, {"skill": "Fractions", "q": "Simplify 18/24.", "opts": ["2/3", "3/4", "4/5", "6/8"], "a": 1}, {"skill": "Fractions", "q": "Which fraction is greater?", "opts": ["2/5", "3/10", "1/2", "4/10"], "a": 2}, {"skill": "Fractions", "q": "Calculate: 1/4 + 2/4.", "opts": ["2/8", "3/4", "3/8", "1/2"], "a": 1}, {"skill": "Fractions", "q": "Calculate: 2/3 + 1/6.", "opts": ["3/9", "1/2", "5/6", "2/9"], "a": 2}, {"skill": "Fractions", "q": "Calculate: 3/4 − 1/8.", "opts": ["1/2", "5/8", "3/8", "7/8"], "a": 1}, {"skill": "Fractions", "q": "Calculate: 2/3 × 3/4.", "opts": ["1/2", "2/7", "5/12", "6/7"], "a": 0}, {"skill": "Decimals", "q": "Which decimal is greatest?", "opts": ["0.45", "0.405", "0.54", "0.504"], "a": 2}, {"skill": "Decimals", "q": "Calculate: 4.7 + 2.35.", "opts": ["6.05", "6.95", "7.05", "7.15"], "a": 2}, {"skill": "Decimals", "q": "Calculate: 8.2 − 3.75.", "opts": ["4.35", "4.45", "4.55", "5.45"], "a": 1}, {"skill": "Decimals", "q": "Write 0.6 as a fraction in simplest form.", "opts": ["6/100", "3/5", "1/6", "6/5"], "a": 1}, {"skill": "Ratio", "q": "Simplify the ratio 12:18.", "opts": ["2:3", "3:2", "4:5", "6:9"], "a": 0}, {"skill": "Ratio", "q": "A class has 10 boys and 15 girls. What is the ratio of boys to girls in simplest form?", "opts": ["2:3", "3:2", "10:15", "5:2"], "a": 0}, {"skill": "Ratio", "q": "If 3 notebooks cost R45, how much would 1 notebook cost?", "opts": ["R10", "R12", "R15", "R18"], "a": 2}, {"skill": "Algebra", "q": "If x = 5, what is 3x + 2?", "opts": ["10", "15", "17", "20"], "a": 2}, {"skill": "Algebra", "q": "Simplify: 4x + 3x.", "opts": ["7", "7x", "12x", "x⁷"], "a": 1}, {"skill": "Algebra", "q": "Simplify: 9a − 4a + 2.", "opts": ["5a + 2", "13a + 2", "5a − 2", "13a − 2"], "a": 0}, {"skill": "Equations", "q": "Solve: x + 7 = 15.", "opts": ["7", "8", "9", "22"], "a": 1}, {"skill": "Equations", "q": "Solve: 3x = 21.", "opts": ["6", "7", "18", "24"], "a": 1}, {"skill": "Patterns", "q": "What is the next number? 5, 9, 13, 17, ___", "opts": ["20", "21", "22", "23"], "a": 1}, {"skill": "Geometry", "q": "Angles on a straight line add up to:", "opts": ["90°", "180°", "270°", "360°"], "a": 1}, {"skill": "Geometry", "q": "A triangle has angles of 50° and 60°. What is the third angle?", "opts": ["60°", "70°", "80°", "90°"], "a": 1}, {"skill": "Geometry", "q": "What is the perimeter of a rectangle with length 8 cm and width 5 cm?", "opts": ["13 cm", "26 cm", "40 cm", "80 cm"], "a": 1}, {"skill": "Geometry", "q": "What is the area of a rectangle measuring 9 cm by 4 cm?", "opts": ["13 cm²", "26 cm²", "36 cm²", "72 cm²"], "a": 2}, {"skill": "Data", "q": "Find the mean of 4, 6, 8 and 10.", "opts": ["6", "7", "8", "9"], "a": 1}, {"skill": "Data", "q": "Find the median of 3, 7, 5, 9 and 6.", "opts": ["5", "6", "7", "9"], "a": 1}, {"skill": "Data", "q": "Which graph is usually best for comparing separate categories?", "opts": ["Bar graph", "Line graph", "Scatter plot", "Pie chart only"], "a": 0}];
+const PATHWAY = {
+"Whole Numbers":"Place Value & Number Sense",
+"Operations":"Four Operations",
+"Order of Operations":"Order of Operations",
+"Factors & Multiples":"Factors, Multiples & Divisibility",
+"Integers":"Integers & Directed Numbers",
+"Fractions":"Fractions Foundations",
+"Decimals":"Decimals & Conversions",
+"Ratio":"Ratio & Proportion",
+"Algebra":"Algebraic Expressions",
+"Equations":"Solving Basic Equations",
+"Patterns":"Number Patterns",
+"Geometry":"Angles, Perimeter & Area",
+"Data":"Data Handling"
+};
+
+let currentQuestion = 0;
+let answers = new Array(QUESTIONS.length).fill(null);
+let learner = "Learner";
+
+const el = id => document.getElementById(id);
+
+function show(id) { el(id).classList.remove("hidden"); }
+function hide(id) { el(id).classList.add("hidden"); }
+
+function renderQuestion() {
+  const item = QUESTIONS[currentQuestion];
+  el("questionCounter").textContent = "Question " + (currentQuestion + 1) + " of " + QUESTIONS.length;
+  el("skillName").textContent = item.skill;
+  el("questionText").textContent = item.q;
+  el("progressFill").style.width = ((currentQuestion + 1) / QUESTIONS.length * 100) + "%";
+
+  const box = el("options");
+  box.innerHTML = "";
+
+  item.opts.forEach((option, index) => {
+    const label = document.createElement("label");
+    label.className = "option" + (answers[currentQuestion] === index ? " selected" : "");
+
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "questionOption";
+    radio.value = String(index);
+    radio.checked = answers[currentQuestion] === index;
+
+    const text = document.createElement("span");
+    text.textContent = String.fromCharCode(65 + index) + ". " + option;
+
+    label.appendChild(radio);
+    label.appendChild(text);
+
+    label.addEventListener("click", function() {
+      answers[currentQuestion] = index;
+      document.querySelectorAll(".option").forEach(x => x.classList.remove("selected"));
+      label.classList.add("selected");
+      updateButtons();
+    });
+
+    box.appendChild(label);
+  });
+
+  updateButtons();
+}
+
+function updateButtons() {
+  const previous = el("previousButton");
+  const next = el("nextButton");
+  previous.disabled = currentQuestion === 0;
+  next.disabled = answers[currentQuestion] === null;
+  next.textContent = currentQuestion === QUESTIONS.length - 1 ? "Finish Baseline Assessment" : "Next";
+}
+
+function startAssessment() {
+  const value = el("learnerName").value.trim();
+  learner = value || "Learner";
+  currentQuestion = 0;
+  answers = new Array(QUESTIONS.length).fill(null);
+  hide("startScreen");
+  hide("resultsScreen");
+  show("quizScreen");
+  renderQuestion();
+  window.scrollTo(0,0);
+}
+
+async function saveResultsToKnowledgeEmpowers(report) {
+  try {
+    await fetch(RESULTS_ENDPOINT,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(report)});
+    return true;
+  } catch(e) { console.error(e); return false; }
+}
+
+function buildReportData() {
+  const stats={};
+  QUESTIONS.forEach((item,i)=>{ if(!stats[item.skill]) stats[item.skill]={correct:0,total:0}; stats[item.skill].total++; if(answers[i]===item.a) stats[item.skill].correct++; });
+  const ordered=Object.entries(stats).sort((a,b)=>(a[1].correct/a[1].total)-(b[1].correct/b[1].total));
+  const strong=ordered.filter(([_,x])=>x.correct/x.total>=.8).map(([x])=>x);
+  const developing=ordered.filter(([_,x])=>x.correct/x.total>=.6&&x.correct/x.total<.8).map(([x])=>x);
+  const priority=ordered.filter(([_,x])=>x.correct/x.total<.6).map(([x])=>x);
+  const pathway=[]; priority.slice(0,4).forEach(x=>pathway.push(PATHWAY[x]||x)); if(pathway.length<3) developing.slice(0,3-pathway.length).forEach(x=>pathway.push(PATHWAY[x]||x)); if(!pathway.length) ordered.slice(0,3).forEach(([x])=>pathway.push(PATHWAY[x]||x));
+  const correct=QUESTIONS.reduce((n,q,i)=>n+(answers[i]===q.a?1:0),0), pct=Math.round(correct/QUESTIONS.length*100);
+  const level=pct>=80?"Strong foundation":pct>=60?"Developing foundation":"Priority support";
+  return {learnerName:learner,grade:"7",overallScore:pct+"%",level,strongAreas:strong.join(", ")||"None identified yet",developingAreas:developing.join(", ")||"None identified yet",priorityAreas:priority.join(", ")||"None identified yet",recommendedPathway:pathway.join(" → ")};
+}
+
+function finishAssessment() {
+  hide("quizScreen");
+  show("resultsScreen");
+
+  const correct = QUESTIONS.reduce((total, item, i) => total + (answers[i] === item.a ? 1 : 0), 0);
+  const percentage = Math.round(correct / QUESTIONS.length * 100);
+
+  let level, cls, summary;
+  if (percentage >= 80) {
+    level = "Strong foundation"; cls = "green";
+    summary = "You demonstrated a strong foundation across many Grade 7 skills. Your next step is to strengthen weaker areas and extend your mathematical thinking.";
+  } else if (percentage >= 60) {
+    level = "Developing foundation"; cls = "amber";
+    summary = "You have a developing Grade 7 foundation. Some skills are secure, while others need focused practice before you move to more challenging work.";
+  } else {
+    level = "Priority support"; cls = "red";
+    summary = "Your baseline suggests that some foundational skills need focused support. Start with the priority areas and build confidence step by step.";
+  }
+
+  el("resultHeading").textContent = "Well done, " + learner + ".";
+  el("score").textContent = percentage + "%";
+  el("level").innerHTML = '<span class="badge ' + cls + '">' + level + '</span>';
+  el("resultSummary").textContent = summary;
+
+  const stats = {};
+  QUESTIONS.forEach((item, i) => {
+    if (!stats[item.skill]) stats[item.skill] = {correct:0,total:0};
+    stats[item.skill].total++;
+    if (answers[i] === item.a) stats[item.skill].correct++;
+  });
+
+  const ordered = Object.entries(stats).sort((a,b) =>
+    (a[1].correct/a[1].total) - (b[1].correct/b[1].total)
+  );
+
+  const skillBox = el("skillResults");
+  skillBox.innerHTML = "";
+  ordered.forEach(([skill, stat]) => {
+    const p = Math.round(stat.correct / stat.total * 100);
+    const statusClass = p >= 80 ? "green" : (p >= 60 ? "amber" : "red");
+    const div = document.createElement("div");
+    div.className = "skill";
+    div.innerHTML =
+      '<div class="skillhead"><span>' + skill + '</span><span class="badge ' + statusClass + '">' + p + '%</span></div>' +
+      '<div class="bar"><i style="width:' + p + '%"></i></div>' +
+      '<div class="small">' + stat.correct + ' of ' + stat.total + ' questions correct</div>';
+    skillBox.appendChild(div);
+  });
+
+  const recBox = el("recommendations");
+  recBox.innerHTML = "";
+  let selected = ordered.filter(([_,s]) => s.correct/s.total < 0.6).slice(0,4);
+  if (selected.length < 3) {
+    selected = selected.concat(ordered.filter(([_,s]) => s.correct/s.total >= 0.6 && s.correct/s.total < 0.8).slice(0, 3-selected.length));
+  }
+  if (selected.length === 0) selected = ordered.slice(0,3);
+
+  selected.forEach(([skill, stat], index) => {
+    const priority = stat.correct/stat.total < 0.6 ? "Priority" : "Develop";
+    const div = document.createElement("div");
+    div.className = "rec";
+    div.innerHTML = '<strong>' + (index+1) + '. ' + (PATHWAY[skill] || skill) + ' — ' + priority + '</strong>' +
+      '<p style="margin:7px 0 0">Your baseline responses suggest that <strong>' + skill + '</strong> should be strengthened before progressing.</p>';
+    recBox.appendChild(div);
+  });
+
+  const report = buildReportData();
+  const status = document.createElement("div");
+  status.className="notice";
+  status.textContent="Saving your KnowledgeEmpowers baseline report…";
+  el("resultsScreen").appendChild(status);
+  saveResultsToKnowledgeEmpowers(report).then(ok=>{ status.innerHTML=ok?"<strong>Assessment saved.</strong> Your KnowledgeEmpowers baseline result has been submitted.":"<strong>Report not submitted.</strong> Please use Print / Save Report and contact KnowledgeEmpowers."; });
+  window.scrollTo(0,0);
+}
+
+el("startButton").addEventListener("click", startAssessment);
+
+el("nextButton").addEventListener("click", function() {
+  if (answers[currentQuestion] === null) return;
+  if (currentQuestion < QUESTIONS.length - 1) {
+    currentQuestion++;
+    renderQuestion();
+    window.scrollTo(0,0);
+  } else {
+    finishAssessment();
+  }
+});
+
+el("previousButton").addEventListener("click", function() {
+  if (currentQuestion > 0) {
+    currentQuestion--;
+    renderQuestion();
+    window.scrollTo(0,0);
+  }
+});
+
+el("retakeButton").addEventListener("click", function() {
+  hide("resultsScreen");
+  show("startScreen");
+  el("learnerName").value = "";
+  window.scrollTo(0,0);
+});
+
+el("printButton").addEventListener("click", function() {
+  window.print();
+});
+
+})();
+</script>
+</body>
+</html>
