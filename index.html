@@ -98,6 +98,9 @@
   .status-tag{font-size:11px;font-weight:700;border-radius:20px;padding:3px 9px;}
   .status-enrolled{background:#EAF4EC;color:var(--ok);}
   .status-inactive{background:#F0EEEC;color:var(--ink-soft);}
+  .mode-tag{font-size:11px;font-weight:700;border-radius:20px;padding:3px 9px;white-space:nowrap;}
+  .mode-online{background:#E8EEF7;color:#2A5A9E;}
+  .mode-inperson{background:var(--pink);color:var(--maroon-dark);}
 
   .day-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
   .day-tab{padding:7px 14px;border-radius:20px;font-size:12.5px;font-weight:600;border:1px solid var(--rule);background:var(--card);color:var(--ink-soft);}
@@ -165,9 +168,10 @@
    Apps Script Web App below. Paste your deployed Web App URL here
    — see apps-script-setup.md for the exact script and sheet layout.
 --------------------------------------------------------------- */
-const API_URL = "https://script.google.com/macros/s/AKfycbwdPhaWGWgXMY0dL8T7KrchOG7XzDQwvOvL8IbosfhQ_gUZj14p3FEJcFTMiNuReJN9mg/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbyhO6WH6C9JV63TL0Hxu_SdZbAxfWEZZEE6ndUrYma3DZa-o4zDrJnhTRiw4Ll1NB92lQ/exec";
 
 const GRADES = ['Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','Grade 9','Grade 10'];
+const SUBJECTS = ['Mathematics', 'English', 'Foundation Phase Maths', 'Foundation Phase English'];
 const BOOKS = [
   ['A1','Whole Number Arithmetic Mastery'],['A2','Place Value, Factors & Multiples'],
   ['A3','Integers & Order of Operations'],['A4','Sequences & Patterns'],
@@ -578,18 +582,37 @@ function renderSchedule(c){
   const isTeacher = session.role === 'teacher';
   const days = ['Mon','Tue','Wed','Thu','Fri'];
 
+  const subjectOptionsHTML = SUBJECTS.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+
+  const teachers = data.roster.filter(u => u.role === 'teacher');
+  const teacherOptionsHTML = teachers.length
+    ? teachers.map(t => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`).join('')
+    : `<option value="" disabled selected>No teacher accounts yet</option>`;
+
+  // Individual active (enrolled) students only — no grade or "All Grades" option.
+  let studentOptionsHTML = '';
+  GRADES.forEach(g => {
+    const students = data.roster.filter(u => u.role==='student' && u.grade===g);
+    if(!students.length) return;
+    studentOptionsHTML += `<optgroup label="${g}">`;
+    students.forEach(s => { studentOptionsHTML += `<option value="${s.username}">${escapeHtml(s.name)}</option>`; });
+    studentOptionsHTML += `</optgroup>`;
+  });
+  if(!studentOptionsHTML) studentOptionsHTML = `<option value="" disabled selected>No enrolled students yet</option>`;
+
   c.innerHTML = `
     <h2 class="page-title">Schedule</h2>
-    <p class="page-sub">Weekly class timetable.</p>
+    <p class="page-sub">Weekly timetable, scheduled per student.</p>
     ${isTeacher ? `
     <div class="panel">
       <h4>Add class to schedule</h4>
       <div class="form-grid">
         <div class="field"><label>Day</label><select id="sDay">${days.map(d=>`<option value="${d}">${d}</option>`).join('')}</select></div>
         <div class="field"><label>Time</label><input id="sTime" type="text" placeholder="2:00\u20132:50"></div>
-        <div class="field"><label>Subject</label><input id="sSubject" type="text"></div>
-        <div class="field"><label>Teacher</label><input id="sTeacher" type="text"></div>
-        <div class="field"><label>Assign to</label><select id="sAssignTo"><option value="All Grades">All Grades</option>${GRADES.map(g=>`<option value="${g}">${g}</option>`).join('')}</select></div>
+        <div class="field"><label>Subject</label><select id="sSubject">${subjectOptionsHTML}</select></div>
+        <div class="field"><label>Teacher</label><select id="sTeacher">${teacherOptionsHTML}</select></div>
+        <div class="field"><label>Assign to</label><select id="sAssignTo">${studentOptionsHTML}</select></div>
+        <div class="field"><label>Mode</label><select id="sMode"><option value="In-person">In-person</option><option value="Online">Online</option></select></div>
       </div>
       <div class="form-actions"><button class="btn btn-primary" id="sSubmit">Add</button></div>
     </div>` : ''}
@@ -607,16 +630,22 @@ function renderSchedule(c){
   });
 
   if(isTeacher){
-    c.querySelector('#sSubmit').addEventListener('click', async () => {
-      const subject = c.querySelector('#sSubject').value.trim();
+    const submitBtn = c.querySelector('#sSubmit');
+    submitBtn.addEventListener('click', async () => {
       const time = c.querySelector('#sTime').value.trim();
-      if(!subject || !time) return;
+      const subject = c.querySelector('#sSubject').value;
+      const teacher = c.querySelector('#sTeacher').value;
+      const assignTo = c.querySelector('#sAssignTo').value;
+      const mode = c.querySelector('#sMode').value;
+      if(!time || !subject || !teacher || !assignTo) return;
       const day = c.querySelector('#sDay').value;
-      const row = { Day: day, Time: time, Subject: subject, Teacher: c.querySelector('#sTeacher').value.trim() || 'TBD', AssignedTo: c.querySelector('#sAssignTo').value };
-      await apiPost('append', { sheet: 'Schedule', row });
-      await refreshData();
-      activeDay = day;
-      renderContent();
+      const row = { Day: day, Time: time, Subject: subject, Teacher: teacher, AssignedTo: assignTo, Mode: mode };
+      await withBusy(submitBtn, 'Adding\u2026', async () => {
+        await apiPost('append', { sheet: 'Schedule', row });
+        await refreshData();
+        activeDay = day;
+        renderContent();
+      });
     });
   }
 
@@ -626,11 +655,12 @@ function renderSchedule(c){
   let rows = items.map(i => `
     <tr>
       <td>${escapeHtml(i.Time)}</td><td>${escapeHtml(i.Subject)}</td><td>${escapeHtml(i.Teacher)}</td>
+      <td><span class="mode-tag ${norm(i.Mode)==='online' ? 'mode-online' : 'mode-inperson'}">${escapeHtml(i.Mode || 'In-person')}</span></td>
       <td><span class="reach ${reachInfo(i.AssignedTo).cls}"><span class="dot"></span>${reachInfo(i.AssignedTo).label}</span></td>
       <td>${session.role==='teacher' ? `<button class="btn btn-danger btn-sm" data-sdel="${i.ID}">Delete</button>` : ''}</td>
     </tr>
   `).join('');
-  tableWrap.innerHTML = `<table class="sched"><thead><tr><th>Time</th><th>Subject</th><th>Teacher</th><th>Assigned</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  tableWrap.innerHTML = `<table class="sched"><thead><tr><th>Time</th><th>Subject</th><th>Teacher</th><th>Mode</th><th>Assigned</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
   if(session.role==='teacher'){
     tableWrap.querySelectorAll('[data-sdel]').forEach(btn => {
       btn.addEventListener('click', async () => {
