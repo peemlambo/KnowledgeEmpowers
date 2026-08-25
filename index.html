@@ -290,9 +290,24 @@ async function doLogin(){
    so a single manual edit can't silently break a role/status check. */
 function norm(v){ return String(v==null?'':v).trim().toLowerCase(); }
 
+// Matches a Day cell to one of Mon/Tue/Wed/Thu/Fri even if it was typed
+// directly into the Sheet as "Monday", "tues", etc. instead of picked from
+// the app's own dropdown — a mismatch here used to silently drop the row.
+const DAY_ALIASES = {
+  mon:'Mon', monday:'Mon',
+  tue:'Tue', tues:'Tue', tuesday:'Tue',
+  wed:'Wed', weds:'Wed', wednesday:'Wed',
+  thu:'Thu', thur:'Thu', thurs:'Thu', thursday:'Thu',
+  fri:'Fri', friday:'Fri'
+};
+function matchDay(d){ return DAY_ALIASES[norm(d)] || null; }
+
 function normalizeData(res){
   const schedule = {}; ['Mon','Tue','Wed','Thu','Fri'].forEach(d => schedule[d] = []);
-  (res.schedule||[]).forEach(row => { if(schedule[row.Day]) schedule[row.Day].push(row); });
+  (res.schedule||[]).forEach(row => {
+    const day = matchDay(row.Day);
+    if(day) schedule[day].push({ ...row, Day: day });
+  });
   const roster = (res.roster || []).map(u => ({
     ...u,
     role: norm(u.role),
@@ -349,6 +364,19 @@ function reachInfo(assignedTo){
 // not delete — keeps a tutor from accidentally removing someone else's post.
 function canPost(){ return session.role === 'teacher' || session.role === 'tutor'; }
 function canDelete(){ return session.role === 'teacher'; }
+
+// Every write is two sequential Apps Script round trips (a POST, then a
+// fresh data fetch) — that's inherent latency we can't remove, but a button
+// that visibly shows "Saving…" instead of doing nothing makes the same
+// wait feel like progress instead of a frozen page.
+async function withBusy(btn, busyText, fn){
+  if(!btn) return fn();
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = busyText;
+  try{ await fn(); }
+  finally{ btn.disabled = false; btn.textContent = original; } // usually moot — a re-render replaces this button anyway
+}
 
 /* ---------------------------------------------------------------
    SHELL / NAV
@@ -530,10 +558,13 @@ function itemRow(item, sheetName){
     </div>
   `;
   if(canDelete()){
-    row.querySelector('[data-del]')?.addEventListener('click', async () => {
-      await apiPost('delete', { sheet: sheetName, id: item.ID });
-      await refreshData();
-      renderContent();
+    const delBtn = row.querySelector('[data-del]');
+    delBtn?.addEventListener('click', async () => {
+      await withBusy(delBtn, 'Deleting\u2026', async () => {
+        await apiPost('delete', { sheet: sheetName, id: item.ID });
+        await refreshData();
+        renderContent();
+      });
     });
   }
   return row;
@@ -603,9 +634,12 @@ function renderSchedule(c){
   if(session.role==='teacher'){
     tableWrap.querySelectorAll('[data-sdel]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        await apiPost('delete', { sheet: 'Schedule', id: btn.getAttribute('data-sdel') });
-        await refreshData();
-        renderContent();
+        const id = btn.getAttribute('data-sdel');
+        await withBusy(btn, '\u2026', async () => {
+          await apiPost('delete', { sheet: 'Schedule', id });
+          await refreshData();
+          renderContent();
+        });
       });
     });
   }
@@ -690,32 +724,41 @@ function renderClasses(c){
         <button class="btn ${isEnrolled?'btn-danger':'btn-ghost'} btn-sm" data-toggle>${isEnrolled?'Deactivate':'Reactivate'}</button>
       `;
       rowsEl.appendChild(row);
-      row.querySelector('[data-save]').addEventListener('click', async () => {
+      const saveBtn = row.querySelector('[data-save]');
+      saveBtn.addEventListener('click', async () => {
         const uname = row.querySelector('[data-username]').value.trim();
         const pass = row.querySelector('[data-password]').value;
         const fields = {};
         if(uname) fields.Username = uname;
         if(pass) fields.Password = pass;
         if(!Object.keys(fields).length) return;
-        await apiPost('update', { sheet: 'Users', id: s.id, fields });
-        await refreshData();
-        renderContent();
+        await withBusy(saveBtn, 'Saving\u2026', async () => {
+          await apiPost('update', { sheet: 'Users', id: s.id, fields });
+          await refreshData();
+          renderContent();
+        });
       });
-      row.querySelector('[data-toggle]').addEventListener('click', async () => {
-        await apiPost('update', { sheet: 'Users', id: s.id, fields: { Status: isEnrolled ? 'Inactive' : 'Enrolled' } });
-        await refreshData();
-        renderContent();
+      const toggleBtn = row.querySelector('[data-toggle]');
+      toggleBtn.addEventListener('click', async () => {
+        await withBusy(toggleBtn, '\u2026', async () => {
+          await apiPost('update', { sheet: 'Users', id: s.id, fields: { Status: isEnrolled ? 'Inactive' : 'Enrolled' } });
+          await refreshData();
+          renderContent();
+        });
       });
     });
-    card.querySelector('[data-addstudent]').addEventListener('click', async () => {
+    const addBtn = card.querySelector('[data-addstudent]');
+    addBtn.addEventListener('click', async () => {
       const name = card.querySelector(`#newName-${slug(g)}`).value.trim();
       const uname = card.querySelector(`#newUser-${slug(g)}`).value.trim();
       const pass = card.querySelector(`#newPass-${slug(g)}`).value;
       if(!name || !uname || !pass) return;
       if(data.roster.some(x => x.username === uname)){ alert('That username is already taken.'); return; }
-      await apiPost('append', { sheet: 'Users', row: { Name:name, Username:uname, Password:pass, Role:'student', Grade:g, Status:'Enrolled' } });
-      await refreshData();
-      renderContent();
+      await withBusy(addBtn, 'Enrolling\u2026', async () => {
+        await apiPost('append', { sheet: 'Users', row: { Name:name, Username:uname, Password:pass, Role:'student', Grade:g, Status:'Enrolled' } });
+        await refreshData();
+        renderContent();
+      });
     });
   });
 
@@ -756,21 +799,27 @@ function renderTutorsSection(wrap){
     `;
     rowsEl.appendChild(row);
 
-    row.querySelector('[data-save]').addEventListener('click', async () => {
+    const tSaveBtn = row.querySelector('[data-save]');
+    tSaveBtn.addEventListener('click', async () => {
       const uname = row.querySelector('[data-username]').value.trim();
       const pass = row.querySelector('[data-password]').value;
       const fields = {};
       if(uname) fields.Username = uname;
       if(pass) fields.Password = pass;
       if(!Object.keys(fields).length) return;
-      await apiPost('update', { sheet: 'Users', id: t.id, fields });
-      await refreshData();
-      renderContent();
+      await withBusy(tSaveBtn, 'Saving\u2026', async () => {
+        await apiPost('update', { sheet: 'Users', id: t.id, fields });
+        await refreshData();
+        renderContent();
+      });
     });
-    row.querySelector('[data-toggle]').addEventListener('click', async () => {
-      await apiPost('update', { sheet: 'Users', id: t.id, fields: { Status: isEnrolled ? 'Inactive' : 'Enrolled' } });
-      await refreshData();
-      renderContent();
+    const tToggleBtn = row.querySelector('[data-toggle]');
+    tToggleBtn.addEventListener('click', async () => {
+      await withBusy(tToggleBtn, '\u2026', async () => {
+        await apiPost('update', { sheet: 'Users', id: t.id, fields: { Status: isEnrolled ? 'Inactive' : 'Enrolled' } });
+        await refreshData();
+        renderContent();
+      });
     });
 
     // Assigned-students checklist, grouped by grade
@@ -793,23 +842,29 @@ function renderTutorsSection(wrap){
       <button class="btn btn-ghost btn-sm" data-save-students>Save assigned students</button>
     `;
     rowsEl.appendChild(manage);
-    manage.querySelector('[data-save-students]')?.addEventListener('click', async () => {
+    const saveStudentsBtn = manage.querySelector('[data-save-students]');
+    saveStudentsBtn?.addEventListener('click', async () => {
       const checked = [...manage.querySelectorAll('input[type=checkbox]:checked')].map(cb => cb.value);
-      await apiPost('update', { sheet: 'Users', id: t.id, fields: { AssignedStudents: checked.join(', ') } });
-      await refreshData();
-      renderContent();
+      await withBusy(saveStudentsBtn, 'Saving\u2026', async () => {
+        await apiPost('update', { sheet: 'Users', id: t.id, fields: { AssignedStudents: checked.join(', ') } });
+        await refreshData();
+        renderContent();
+      });
     });
   });
 
-  card.querySelector('#addTutorBtn').addEventListener('click', async () => {
+  const addTutorBtn = card.querySelector('#addTutorBtn');
+  addTutorBtn.addEventListener('click', async () => {
     const name = card.querySelector('#newTutorName').value.trim();
     const uname = card.querySelector('#newTutorUser').value.trim();
     const pass = card.querySelector('#newTutorPass').value;
     if(!name || !uname || !pass) return;
     if(data.roster.some(x => x.username === uname)){ alert('That username is already taken.'); return; }
-    await apiPost('append', { sheet: 'Users', row: { Name:name, Username:uname, Password:pass, Role:'tutor', Grade:'', Status:'Enrolled', AssignedStudents:'' } });
-    await refreshData();
-    renderContent();
+    await withBusy(addTutorBtn, 'Adding\u2026', async () => {
+      await apiPost('append', { sheet: 'Users', row: { Name:name, Username:uname, Password:pass, Role:'tutor', Grade:'', Status:'Enrolled', AssignedStudents:'' } });
+      await refreshData();
+      renderContent();
+    });
   });
 }
 </script>
