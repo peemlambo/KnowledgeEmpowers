@@ -356,23 +356,34 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
 /* ---------------------------------------------------------------
    VISIBILITY
 --------------------------------------------------------------- */
+// AssignedTo can be a single value ("Grade 8", a username, "All Grades")
+// or a comma-separated list of usernames (multiple students on one
+// schedule entry). Splitting always works: a single value with no comma
+// just becomes a one-item list, so nothing else needs to change.
+function splitTargets(assignedTo){
+  return String(assignedTo || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
 function visibleTo(assignedTo, user){
   if(user.role === 'teacher') return true;
   if(!assignedTo || assignedTo === 'All Grades') return true;
+  const targets = splitTargets(assignedTo);
   if(user.role === 'tutor'){
-    if(user.assignedStudents && user.assignedStudents.includes(assignedTo)) return true;
-    if(user.assignedGrades && user.assignedGrades.includes(assignedTo)) return true;
+    if(user.assignedStudents && targets.some(t => user.assignedStudents.includes(t))) return true;
+    if(user.assignedGrades && targets.some(t => user.assignedGrades.includes(t))) return true;
     return false;
   }
-  if(assignedTo === user.grade) return true;
-  if(assignedTo === user.username) return true;
+  if(targets.includes(user.grade)) return true;
+  if(targets.includes(user.username)) return true;
   return false;
 }
 function reachInfo(assignedTo){
   if(!assignedTo || assignedTo === 'All Grades') return { cls:'reach-all', label:'All Grades' };
-  if(GRADES.includes(assignedTo)) return { cls:'reach-grade', label:assignedTo };
-  const u = data.roster.find(x => x.username === assignedTo);
-  return { cls:'reach-student', label: u ? (u.name + ' only') : 'Individual' };
+  const targets = splitTargets(assignedTo);
+  if(targets.length === 1 && GRADES.includes(targets[0])) return { cls:'reach-grade', label:targets[0] };
+  const names = targets.map(t => { const u = data.roster.find(x => x.username === t); return u ? u.name : null; }).filter(Boolean);
+  if(!names.length) return { cls:'reach-student', label:'Individual' };
+  return { cls:'reach-student', label: names.length === 1 ? names[0] + ' only' : names.join(', ') };
 }
 // Teachers post/delete anything. Tutors can post to their own students but
 // not delete — keeps a tutor from accidentally removing someone else's post.
@@ -598,16 +609,19 @@ function renderSchedule(c){
     ? tutors.map(t => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`).join('')
     : `<option value="" disabled selected>No tutor accounts yet</option>`;
 
-  // Individual active (enrolled) students only — no grade or "All Grades" option.
-  let studentOptionsHTML = '';
+  // Active (enrolled) students, checkbox list grouped by grade — one
+  // schedule entry can now cover one-on-one or a small group.
+  let studentChecklistHTML = '';
   GRADES.forEach(g => {
     const students = data.roster.filter(u => u.role==='student' && u.grade===g);
     if(!students.length) return;
-    studentOptionsHTML += `<optgroup label="${g}">`;
-    students.forEach(s => { studentOptionsHTML += `<option value="${s.username}">${escapeHtml(s.name)}</option>`; });
-    studentOptionsHTML += `</optgroup>`;
+    studentChecklistHTML += `<div class="tutor-students-group">${g}</div><div class="tutor-students-grid">`;
+    students.forEach(s => {
+      studentChecklistHTML += `<label><input type="checkbox" class="sched-student-cb" value="${s.username}"> ${escapeHtml(s.name)}</label>`;
+    });
+    studentChecklistHTML += `</div>`;
   });
-  if(!studentOptionsHTML) studentOptionsHTML = `<option value="" disabled selected>No enrolled students yet</option>`;
+  if(!studentChecklistHTML) studentChecklistHTML = `<div class="empty" style="padding:8px 0;">No enrolled students yet.</div>`;
 
   // Fixed 50-minute lesson slots, 08:00 through 19:00 start times.
   const timeOptionsHTML = TIME_SLOTS.map(t => `<option value="${t}">${t}</option>`).join('');
@@ -623,8 +637,11 @@ function renderSchedule(c){
         <div class="field"><label>Time</label><select id="sTime">${timeOptionsHTML}</select></div>
         <div class="field"><label>Subject</label><select id="sSubject">${subjectOptionsHTML}</select></div>
         <div class="field"><label>Tutor</label><select id="sTutor">${tutorOptionsHTML}</select></div>
-        <div class="field"><label>Assign to</label><select id="sAssignTo">${studentOptionsHTML}</select></div>
         <div class="field"><label>Mode</label><select id="sMode"><option value="In-person">In-person</option><option value="Online">Online</option></select></div>
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>Assign to (select one or more)</label>
+        ${studentChecklistHTML}
       </div>
       <div class="form-actions"><button class="btn btn-primary" id="sSubmit">Add</button></div>
     </div>` : ''}
@@ -647,7 +664,7 @@ function renderSchedule(c){
       const time = c.querySelector('#sTime').value;
       const subject = c.querySelector('#sSubject').value;
       const tutor = c.querySelector('#sTutor').value;
-      const assignTo = c.querySelector('#sAssignTo').value;
+      const assignTo = [...c.querySelectorAll('.sched-student-cb:checked')].map(cb => cb.value).join(', ');
       const mode = c.querySelector('#sMode').value;
       if(!time || !subject || !tutor || !assignTo) return;
       const day = c.querySelector('#sDay').value;
@@ -664,15 +681,20 @@ function renderSchedule(c){
   const items = (data.schedule[activeDay] || []).filter(i => visibleTo(i.AssignedTo, session));
   const tableWrap = c.querySelector('#schedTable');
   if(!items.length){ tableWrap.innerHTML = '<div class="empty">Nothing scheduled for this day yet.</div>'; return; }
-  let rows = items.map(i => `
+  let rows = items.map(i => {
+    const usernames = splitTargets(i.AssignedTo);
+    const names = usernames.map(u => { const s = data.roster.find(x => x.username === u); return s ? s.name : 'Unknown'; });
+    const studentName = names.join(', ') || 'Unknown';
+    return `
     <tr>
       <td>${escapeHtml(i.Time)}</td><td>${escapeHtml(i.Subject)}</td><td>${escapeHtml(i.Tutor)}</td>
       <td><span class="mode-tag ${norm(i.Mode)==='online' ? 'mode-online' : 'mode-inperson'}">${escapeHtml(i.Mode || 'In-person')}</span></td>
-      <td><span class="reach ${reachInfo(i.AssignedTo).cls}"><span class="dot"></span>${reachInfo(i.AssignedTo).label}</span></td>
+      <td>${escapeHtml(studentName)}</td>
       <td>${session.role==='teacher' ? `<button class="btn btn-danger btn-sm" data-sdel="${i.ID}">Delete</button>` : ''}</td>
     </tr>
-  `).join('');
-  tableWrap.innerHTML = `<table class="sched"><thead><tr><th>Time</th><th>Subject</th><th>Tutor</th><th>Mode</th><th>Assigned</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  `;
+  }).join('');
+  tableWrap.innerHTML = `<table class="sched"><thead><tr><th>Time</th><th>Subject</th><th>Tutor</th><th>Mode</th><th>Student(s)</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
   if(session.role==='teacher'){
     tableWrap.querySelectorAll('[data-sdel]').forEach(btn => {
       btn.addEventListener('click', async () => {
