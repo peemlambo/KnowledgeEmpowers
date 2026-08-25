@@ -110,6 +110,8 @@
   table.sched td{padding:9px 10px;border-bottom:1px solid var(--rule);}
 
   .roster-card{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:16px 18px;margin-bottom:16px;}
+  .roster-alt-maroon{background:var(--pink);}
+  .roster-alt-grey{background:#F1EFEC;}
   .roster-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;}
   .roster-head h4{font-size:15px;}
   .roster-count{font-size:11.5px;color:var(--ink-soft);}
@@ -172,6 +174,11 @@ const API_URL = "https://script.google.com/macros/s/AKfycbyhO6WH6C9JV63TL0Hxu_Sd
 
 const GRADES = ['Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','Grade 9','Grade 10'];
 const SUBJECTS = ['Mathematics', 'English', 'Foundation Phase Maths', 'Foundation Phase English'];
+// Fixed 50-minute one-on-one lesson slots, on the hour, 08:00 through 19:00.
+const TIME_SLOTS = Array.from({length: 12}, (_, i) => {
+  const h = 8 + i;
+  return `${h}:00\u2013${h}:50`;
+});
 const BOOKS = [
   ['A1','Whole Number Arithmetic Mastery'],['A2','Place Value, Factors & Multiples'],
   ['A3','Integers & Order of Operations'],['A4','Sequences & Patterns'],
@@ -230,7 +237,7 @@ async function apiPost(action, payload){
 let session = null;      // {id, name, role, grade}
 let data = null;         // {roster, homework, resources, schedule, announcements}
 let activeTab = 'overview';
-let activeDay = 'Mon';
+let activeDay = 'Monday';
 
 /* ---------------------------------------------------------------
    LOGIN
@@ -294,20 +301,23 @@ async function doLogin(){
    so a single manual edit can't silently break a role/status check. */
 function norm(v){ return String(v==null?'':v).trim().toLowerCase(); }
 
-// Matches a Day cell to one of Mon/Tue/Wed/Thu/Fri even if it was typed
-// directly into the Sheet as "Monday", "tues", etc. instead of picked from
+// Matches a Day cell to a canonical full day name even if it was typed
+// directly into the Sheet as "mon", "tues", etc. instead of picked from
 // the app's own dropdown — a mismatch here used to silently drop the row.
+const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 const DAY_ALIASES = {
-  mon:'Mon', monday:'Mon',
-  tue:'Tue', tues:'Tue', tuesday:'Tue',
-  wed:'Wed', weds:'Wed', wednesday:'Wed',
-  thu:'Thu', thur:'Thu', thurs:'Thu', thursday:'Thu',
-  fri:'Fri', friday:'Fri'
+  mon:'Monday', monday:'Monday',
+  tue:'Tuesday', tues:'Tuesday', tuesday:'Tuesday',
+  wed:'Wednesday', weds:'Wednesday', wednesday:'Wednesday',
+  thu:'Thursday', thur:'Thursday', thurs:'Thursday', thursday:'Thursday',
+  fri:'Friday', friday:'Friday',
+  sat:'Saturday', saturday:'Saturday',
+  sun:'Sunday', sunday:'Sunday'
 };
 function matchDay(d){ return DAY_ALIASES[norm(d)] || null; }
 
 function normalizeData(res){
-  const schedule = {}; ['Mon','Tue','Wed','Thu','Fri'].forEach(d => schedule[d] = []);
+  const schedule = {}; DAYS.forEach(d => schedule[d] = []);
   (res.schedule||[]).forEach(row => {
     const day = matchDay(row.Day);
     if(day) schedule[day].push({ ...row, Day: day });
@@ -467,9 +477,8 @@ function bookSelectHTML(id){
 --------------------------------------------------------------- */
 function renderOverview(c){
   const hw = data.homework.filter(i => visibleTo(i.AssignedTo, session));
-  const days = ['Mon','Tue','Wed','Thu','Fri'];
-  const todayName = days[new Date().getDay()-1] || null;
-  const todaySched = todayName ? data.schedule[todayName].filter(i => visibleTo(i.AssignedTo, session)) : [];
+  const todayName = DAYS[(new Date().getDay() + 6) % 7]; // JS getDay() is Sun-first; DAYS is Monday-first
+  const todaySched = data.schedule[todayName].filter(i => visibleTo(i.AssignedTo, session));
   const ann = data.announcements.filter(i => visibleTo(i.AssignedTo, session));
 
   c.innerHTML = `
@@ -477,7 +486,7 @@ function renderOverview(c){
     <p class="page-sub">${session.role==='teacher' ? 'Everything posted across all grades and learners.' : `Welcome back, ${escapeHtml(session.name)}.`}</p>
     <div class="stat-grid">
       <div class="stat-card"><div class="num">${hw.length}</div><div class="label">Homework items</div></div>
-      <div class="stat-card"><div class="num">${todaySched.length}</div><div class="label">${todayName ? todayName+"'s classes" : 'No school today'}</div></div>
+      <div class="stat-card"><div class="num">${todaySched.length}</div><div class="label">${todayName}'s classes</div></div>
       <div class="stat-card"><div class="num">${ann.length}</div><div class="label">Announcements</div></div>
     </div>
     <div class="panel"><h4>Recent announcements</h4><div class="item-list" id="ov-ann"></div></div>
@@ -580,14 +589,14 @@ function itemRow(item, sheetName){
 --------------------------------------------------------------- */
 function renderSchedule(c){
   const isTeacher = session.role === 'teacher';
-  const days = ['Mon','Tue','Wed','Thu','Fri'];
+  const days = DAYS;
 
   const subjectOptionsHTML = SUBJECTS.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
 
-  const teachers = data.roster.filter(u => u.role === 'teacher');
-  const teacherOptionsHTML = teachers.length
-    ? teachers.map(t => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`).join('')
-    : `<option value="" disabled selected>No teacher accounts yet</option>`;
+  const tutors = data.roster.filter(u => u.role === 'tutor');
+  const tutorOptionsHTML = tutors.length
+    ? tutors.map(t => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`).join('')
+    : `<option value="" disabled selected>No tutor accounts yet</option>`;
 
   // Individual active (enrolled) students only — no grade or "All Grades" option.
   let studentOptionsHTML = '';
@@ -600,6 +609,9 @@ function renderSchedule(c){
   });
   if(!studentOptionsHTML) studentOptionsHTML = `<option value="" disabled selected>No enrolled students yet</option>`;
 
+  // Fixed 50-minute lesson slots, 08:00 through 19:00 start times.
+  const timeOptionsHTML = TIME_SLOTS.map(t => `<option value="${t}">${t}</option>`).join('');
+
   c.innerHTML = `
     <h2 class="page-title">Schedule</h2>
     <p class="page-sub">Weekly timetable, scheduled per student.</p>
@@ -608,9 +620,9 @@ function renderSchedule(c){
       <h4>Add class to schedule</h4>
       <div class="form-grid">
         <div class="field"><label>Day</label><select id="sDay">${days.map(d=>`<option value="${d}">${d}</option>`).join('')}</select></div>
-        <div class="field"><label>Time</label><input id="sTime" type="text" placeholder="2:00\u20132:50"></div>
+        <div class="field"><label>Time</label><select id="sTime">${timeOptionsHTML}</select></div>
         <div class="field"><label>Subject</label><select id="sSubject">${subjectOptionsHTML}</select></div>
-        <div class="field"><label>Teacher</label><select id="sTeacher">${teacherOptionsHTML}</select></div>
+        <div class="field"><label>Tutor</label><select id="sTutor">${tutorOptionsHTML}</select></div>
         <div class="field"><label>Assign to</label><select id="sAssignTo">${studentOptionsHTML}</select></div>
         <div class="field"><label>Mode</label><select id="sMode"><option value="In-person">In-person</option><option value="Online">Online</option></select></div>
       </div>
@@ -632,14 +644,14 @@ function renderSchedule(c){
   if(isTeacher){
     const submitBtn = c.querySelector('#sSubmit');
     submitBtn.addEventListener('click', async () => {
-      const time = c.querySelector('#sTime').value.trim();
+      const time = c.querySelector('#sTime').value;
       const subject = c.querySelector('#sSubject').value;
-      const teacher = c.querySelector('#sTeacher').value;
+      const tutor = c.querySelector('#sTutor').value;
       const assignTo = c.querySelector('#sAssignTo').value;
       const mode = c.querySelector('#sMode').value;
-      if(!time || !subject || !teacher || !assignTo) return;
+      if(!time || !subject || !tutor || !assignTo) return;
       const day = c.querySelector('#sDay').value;
-      const row = { Day: day, Time: time, Subject: subject, Teacher: teacher, AssignedTo: assignTo, Mode: mode };
+      const row = { Day: day, Time: time, Subject: subject, Tutor: tutor, AssignedTo: assignTo, Mode: mode };
       await withBusy(submitBtn, 'Adding\u2026', async () => {
         await apiPost('append', { sheet: 'Schedule', row });
         await refreshData();
@@ -654,13 +666,13 @@ function renderSchedule(c){
   if(!items.length){ tableWrap.innerHTML = '<div class="empty">Nothing scheduled for this day yet.</div>'; return; }
   let rows = items.map(i => `
     <tr>
-      <td>${escapeHtml(i.Time)}</td><td>${escapeHtml(i.Subject)}</td><td>${escapeHtml(i.Teacher)}</td>
+      <td>${escapeHtml(i.Time)}</td><td>${escapeHtml(i.Subject)}</td><td>${escapeHtml(i.Tutor)}</td>
       <td><span class="mode-tag ${norm(i.Mode)==='online' ? 'mode-online' : 'mode-inperson'}">${escapeHtml(i.Mode || 'In-person')}</span></td>
       <td><span class="reach ${reachInfo(i.AssignedTo).cls}"><span class="dot"></span>${reachInfo(i.AssignedTo).label}</span></td>
       <td>${session.role==='teacher' ? `<button class="btn btn-danger btn-sm" data-sdel="${i.ID}">Delete</button>` : ''}</td>
     </tr>
   `).join('');
-  tableWrap.innerHTML = `<table class="sched"><thead><tr><th>Time</th><th>Subject</th><th>Teacher</th><th>Mode</th><th>Assigned</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  tableWrap.innerHTML = `<table class="sched"><thead><tr><th>Time</th><th>Subject</th><th>Tutor</th><th>Mode</th><th>Assigned</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
   if(session.role==='teacher'){
     tableWrap.querySelectorAll('[data-sdel]').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -725,10 +737,10 @@ function renderClasses(c){
     <div id="rosterWrap"></div>
   `;
   const wrap = c.querySelector('#rosterWrap');
-  GRADES.forEach(g => {
+  GRADES.forEach((g, gi) => {
     const students = data.roster.filter(u => u.role==='student' && u.grade===g);
     const card = document.createElement('div');
-    card.className = 'roster-card';
+    card.className = 'roster-card ' + (gi % 2 === 0 ? 'roster-alt-maroon' : 'roster-alt-grey');
     card.innerHTML = `
       <div class="roster-head"><h4>${g}</h4><span class="roster-count">${students.length} enrolled</span></div>
       <div id="rows-${slug(g)}"></div>
